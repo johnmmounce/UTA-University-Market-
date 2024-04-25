@@ -1,0 +1,22 @@
+{
+  "id": "",
+  "about": {
+    "final_amount": 0.0,
+    "buyer_email": "",
+    "seller_email": "",
+    "closing_date": "",
+    "status": ""
+  },
+  "record": {
+    "post_id": "",
+    "chat_id": "",
+    "dead_post": false,
+    "title": "",
+    "description": "",
+    "image_contexts": [""],
+    "genre": "",
+    "serial_number": "",
+    "descriptors": [{}]
+  },
+  "payments": [{}]
+}

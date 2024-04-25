@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:id="@+id/dash_market_button"
+        android:checked="true"
+        android:icon="@drawable/market_icon"
+        android:title="@string/dash_market_button_txt" />
+    <item
+        android:id="@+id/dash_post_button"
+        android:icon="@drawable/add_icon"
+        android:title="@string/dash_post_button_txt"
+        android:visible="true"/>
+    <item
+        android:id="@+id/dash_watch_button"
+        android:icon="@drawable/watch_icon"
+        android:title="@string/dash_watch_button_txt"
+        android:visible="true" />
+    <item
+        android:id="@+id/dash_chat_button"
+        android:icon="@drawable/chat_icon"
+        android:title="@string/dash_chat_button_txt"
+        android:visible="true" />
+    <item
+        android:id="@+id/dash_profile_button"
+        android:icon="@drawable/user_icon"
+        android:title="@string/dash_profile_button_txt" />
+</menu>

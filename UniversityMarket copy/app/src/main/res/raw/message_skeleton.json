@@ -1,0 +1,13 @@
+{
+  "id": "",
+  "about": {
+    "sender_email": "",
+    "contents": "",
+    "timestamp": "",
+    "read_emails": [""]
+  },
+  "offer": {
+    "offer_post_id": "",
+    "offer_taken": false
+  }
+}

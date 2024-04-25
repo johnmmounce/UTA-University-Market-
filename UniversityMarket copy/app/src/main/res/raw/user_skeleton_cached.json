@@ -1,0 +1,17 @@
+{
+  "id": "",
+  "about": {
+    "email": "",
+    "first_name": "",
+    "last_name": "",
+    "date_created": "",
+    "description": "",
+    "ratings": [{}]
+  },
+  "interactions": {
+    "post_ids": [""],
+    "watch_ids": [""],
+    "transact_ids": [""],
+    "chat_ids": [""]
+  }
+}

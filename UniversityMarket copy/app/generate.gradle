@@ -1,0 +1,779 @@
+import groovy.json.*
+import java.nio.charset.StandardCharsets
+
+static Object typeString(String line) {
+    Object field
+    if(line.matches("([0-9]+\\.[0-9]+)")) {
+        if(line.length() <= 20)
+            field = Float.parseFloat(line)
+        else if(line.length() <= 40)
+            field = Double.parseDouble(line)
+        else
+            field = new BigDecimal(line)
+    } else if(line.matches("[0-9]+")) {
+        BigInteger val = new BigInteger(line)
+        if (val <= Integer.MAX_VALUE)
+            field = Integer.parseInt(line)
+        else if (val <= Long.MAX_VALUE)
+            field = Long.parseLong(line)
+        else
+            field = val
+    } else if(line.toLowerCase().matches("(true|false)")) {
+        field = Boolean.parseBoolean(line)
+    } else {
+        field = line
+    }
+    return field
+}
+
+static String checkGeneric(def name, def type, def parent, def map, int index) {
+    if(index == -1)
+        return "super"
+    def arr = ((String) parent.getClass()).split("\\.")
+    String ptype = arr[arr.length - 1], pname = null
+    int idx = -1, pidx = -1
+    def cmap = map.get(index)
+
+    for(int i = 0; i < cmap.size(); i++) {
+        if (!cmap.get(i).toString().contains(parent.toString()))
+            continue
+
+        for(int z = 0; z < cmap.get(i).size(); z++) {
+            if(pname != null)
+                break
+            Object elem = cmap.get(i).get(z)
+            if (elem == ptype + "<Object>")
+                return
+            if (elem.toString().contains(ptype)) {
+                if(z == 1 && name == null && elem.toString().contains("<"))
+                    continue
+                ptype = elem
+                pidx = i
+                idx = z
+                if(z == 1)
+                    pname = cmap.get(i).get(0)
+                break
+            }
+        }
+    }
+    if(idx < 0 || pidx < 0)
+        return
+    def pmap = cmap.get(pidx)
+    def temp = ptype.split("(>)+[^,]*")[0].split(".*[^a-zA-Z]+")
+    ptype = ptype.split("<")[0]
+    if(temp.length > 1) {
+        if (temp[1] != type) {
+            if (ptype.contains("Map"))
+                pmap.set(idx, ptype + "<String, Object>")
+            else
+                pmap.set(idx, ptype + "<Object>")
+        }
+    } else {
+        if(ptype.contains("Map"))
+            pmap.set(idx, ptype + "<String, " + type + ">")
+        else
+            pmap.set(idx, ptype + "<" + type + ">")
+    }
+    return pname
+}
+
+static void elemAdd(Object first, Object second, Object third, def list, def map, def index) {
+    list = new ArrayList<>()
+    String type = "", name = null
+    if(first instanceof String) {
+        list.add(first)
+        name = first
+    }
+    if(third instanceof String | third instanceof Number | third instanceof Boolean) {
+        third = typeString(third.toString())
+    } else if(third.size == 0) {
+        if(third instanceof Map)
+            type = "<String, Object>"
+        else
+            type = "<Object>"
+    }
+    String[] arr = ((String) third.getClass()).split("\\.")
+    String buffer = type
+    type = arr[arr.length - 1].concat(buffer)
+    Object parent = list.size() != 0 ? second : first
+    String from = checkGeneric(name, type, parent, map, index - 1)
+    list.add(type)
+
+    if(second instanceof Number)
+        list.add(second)
+    list.add(third)
+    if(from != null)
+        list.add(from)
+    map.get(index).add(list)
+}
+
+static void mapAdd(Object data, ArrayList<Object> map, int index) {
+    List<Object> list = new ArrayList<>()
+    if(index + 1 > map.size()) {
+        map.add(list)
+    }
+    if(data instanceof Map) {
+        for(key in data.keySet()) {
+            elemAdd(key, data, data.get(key), list, map, index)
+        }
+    } else if(data instanceof List) {
+        for(int i = 0; i < ((ArrayList) data).size(); i++) {
+            elemAdd(data, i + "", data.get(i), list, map, index)
+        }
+    }
+}
+
+static void expand(def val, def map, def depth) {
+    mapAdd(val, map, depth)
+    for(obj in val) {
+        if(obj instanceof Map) {
+            HashMap<String, Object> json = new JsonSlurperClassic().parseText(new JsonBuilder(obj).toString())
+            crawl(json, map, depth + 1)
+        }
+        if(obj instanceof List) {
+            expand(obj, map, depth + 1)
+        }
+    }
+}
+
+static void crawl(def json, def map, def depth) {
+    mapAdd(json, map, depth)
+    for(val in json.values()) {
+        if(val instanceof Map) {
+            String temp = new JsonBuilder(val).toString()
+            json = new JsonSlurperClassic().parseText(temp)
+            crawl(json, map, depth + 1)
+        }
+        if(val instanceof List) {
+            expand(val, map, depth + 1)
+        }
+    }
+}
+
+static void provCrawl(String name, HashMap<String, List<String>> map, HashMap<String, List<Object>> valMap) {
+    List<Object> list = new ArrayList<>()
+    HashMap<String, Object> hashes = new HashMap<>()
+    String params = "", args = "", clean = ""
+    for(int a = 0; map.containsKey(name) && a < map.get(name).size(); a++) {
+        List<String> currentProv = map.get(name).get(a)
+        if(currentProv.get(0).contains("HashMap<")) {
+            provCrawl(currentProv.get(1), map, valMap)
+            List<Object> response = valMap.get(currentProv.get(1))
+            params = params.concat(response.get(0))
+            response.get(1).forEach((key, value) -> hashes.merge(key, value, (oldValue, newValue) ->
+                    oldValue != newValue ? oldValue : newValue))
+            if(a + 1 < map.get(name).size())
+                params = params.concat(", ")
+        } else {
+            params = params.concat(currentProv.get(0) + " " + currentProv.get(1))
+            args = args.concat(currentProv.get(1))
+            clean = clean.concat(currentProv.get(1))
+            if(a + 1 < map.get(name).size()) {
+                params = params.concat(", ")
+                args = args.concat(", ")
+                clean = clean.concat(",")
+            }
+        }
+    }
+    list.add(params)
+    hashes.put(name, args)
+    list.add(hashes)
+    list.add(clean)
+    if(!valMap.containsKey(name))
+        valMap.put(name, list)
+}
+
+String[] generate(def map, def class_name, def file) {
+    String tab = "    "
+    String[] response = new String[4]
+    String idMethod = "", idName = ""
+    HashMap<String, List<String>> provHierarchy = new HashMap<>()
+    HashMap<String, List<Object>> provFields = new HashMap<>()
+    HashMap<String, String> methodNameMap = new HashMap<>()
+    List<String> provKeys = new ArrayList<>()
+    boolean cache = file.name.contains("cached")
+
+    String[] temp = file.getPath().split("[_a-zA-Z0-9\\.]")
+    String fd_symbol = temp[temp.length - 1]
+    temp = file.getPath().split(fd_symbol == "\\" ? "\\\\" : fd_symbol)
+    String filepath = ""
+    for(int i = 4; i > 1; i--)
+        filepath = filepath.concat(temp[temp.length - i] + fd_symbol)
+    String comments = \
+            "\n/**\n * <b>\n * ANY MODIFICATIONS WILL BE OVERWRITTEN ON BUILD \n" +
+            " * </b><p>\n * File based on '" + file.name + "'" +
+            " located at <a href=\"file://" + file.getPath().split(file.name)[0] + "\">" + filepath + "</a>\n" +
+            "*/\n"
+    String packag = "package com.example.universitymarket.models;\n"
+    String imports = \
+            "\nimport androidx.annotation.Discouraged;\n" +
+            "import java.util.HashMap;\n" +
+            "import java.util.ArrayList;\n"
+    String declarations = ""
+    String constructor = \
+            "\n" + tab + "@Discouraged(message = \"Unless you are initializing from another skeleton POJO, do not use this constructor\")\n" + tab +
+            "public " + class_name + "(HashMap<String, Object> rawdata) {\n"
+    String methods = ""
+
+    println(
+            "__________________________________________________\n" +
+                    "\tGenerating class from " + file.name + "\n" +
+                    "=================================================="
+    )
+    for(int pass = 0; pass < 3; pass++) {
+        boolean ubh = false
+        for (int i = 0; i < map.size(); i++) {
+            ArrayList<String> provTested = new ArrayList<>()
+            for (int z = 0; z < map.get(i).size(); z++) {
+                def cmap = map.get(i).get(z)
+                int csize = cmap.size()
+
+                if(pass == 0)
+                    println(cmap + " i = " + i)
+                if (csize < 4)
+                    continue
+
+                temp = ((String) cmap.get(1).toString()).split("^[^<]+")
+                String name = cmap.get(0), type = cmap.get(1), data = cmap.get(2), prov = cmap.get(3)
+                String generic = temp.size() > 1 ? temp[1] : "", mname = ""
+                temp = name.split("[^a-zA-Z0-9]")
+                for (ss in temp) {
+                    int size = ss.size()
+                    if (size > 0)
+                        mname = mname.concat(ss.charAt(0).toUpperCase().toString())
+                    if (size > 1)
+                        mname = mname.concat(ss.substring(1))
+                }
+                methodNameMap.put(name, mname)
+
+                switch(pass) {
+                    case 0:
+                        //println(cmap)
+                        if (i == 0) {
+                            if(z == 0) {
+                                constructor = constructor.concat(
+                                        tab + tab + "ArrayList<String> rawKeys = new ArrayList<>(rawdata != null ? rawdata.keySet() : new ArrayList<>());\n"
+                                )
+                            }
+                            if(type == "String") {
+                                idName = name
+                                idMethod = mname
+                            }
+                            constructor = constructor.concat(
+                                    tab + tab + "super.put(\"" + name + "\", rawKeys.contains(\"" + name + "\") ? rawdata.get(\"" + name + "\") : null);\n"
+                            )
+                        }
+                        if(!provHierarchy.containsKey(prov)) {
+                            provHierarchy.put(prov, new ArrayList<>())
+                            provKeys.add(prov)
+                        }
+                        List<Object> provColl = new ArrayList<>()
+                        provColl.add(type)
+                        provColl.add(name)
+                        provHierarchy.get(prov).add(provColl)
+                        declarations = declarations.concat(
+                                tab + "private " + type + " " + name + " = " +
+                                        (type.contains("<") ? "new " + type.split("<.*>")[0] + "<>()" : "null") + ";\n"
+                        )
+                        methods = methods.concat(
+                                "\n\n" + tab + "public " + type + " get" +
+                                        mname + "() { return " + name + "; }"
+                        )
+                        break
+                    case 1:
+                        if(z == 0 && i == 0) {
+                            provCrawl("super", provHierarchy, provFields)
+                            println(provHierarchy)
+                        }
+                        if(!provTested.contains(prov)) {
+                            provTested.add(prov)
+                            if(prov != "super") {
+                                constructor = constructor.concat(
+                                        tab + tab + "ArrayList<String> " + prov + "Keys = new ArrayList<>(" + prov + " != null ? " + prov + ".keySet() : new ArrayList<>());\n"
+                                )
+                            } else {
+                                constructor = constructor.concat(
+                                        tab + tab + "ArrayList<String> " + prov + "Keys = new ArrayList<>(" + prov + ".keySet());\n"
+                                )
+                            }
+                        }
+                        if(
+                        type == "Integer" ||
+                                type == "Float" ||
+                                type == "Double" ||
+                                type == "BigInteger" ||
+                                type == "BigDecimal" ||
+                                type == "Long"
+                        ) {
+                            if(type == "Integer") {
+                                constructor = constructor.concat(
+                                        tab + tab + name + " = " + prov + "Keys.contains(\"" + name + "\") ? ((Number) " + prov + ".get(\"" + name + "\")).intValue() : null;\n"
+                                )
+                            } else {
+                                constructor = constructor.concat(
+                                        tab + tab + name + " = " + prov + "Keys.contains(\"" + name + "\") ? ((Number) " + prov + ".get(\"" + name + "\"))." + type.toLowerCase() + "Value() : null;\n"
+                                )
+                            }
+                        } else {
+                            constructor = constructor.concat(
+                                    tab + tab + name + " = " + prov + "Keys.contains(\"" + name + "\") ? (" + type + ") " + prov + ".get(\"" + name + "\") : "
+                            )
+                            constructor = constructor.concat(
+                                    type.contains("<") ? "new " + type.split("<")[0] + "<>();\n" : "null;\n"
+                            )
+                        }
+
+                        if (generic == "<HashMap>") {
+                            ubh = true
+                            declarations = declarations.concat(
+                                    tab + "private HashMap<String, Object> " + name + "Map = new HashMap<>();\n"
+                            )
+                            methods = methods.concat(
+                                    "\n\n" + tab + "public HashMap<String, Object> get" +
+                                            mname + "Map() { return " + name + "Map; }"
+                            )
+                        }
+                        break
+                    case 2:
+                        if(type.contains("HashMap<")) {
+                            HashMap<String, String> provHash = (HashMap<String, String>) provFields.get(name).get(1)
+                            List<String> provNested = provHash.keySet().asList()
+                            methods = methods.concat(
+                                    "\n\n" + tab + "public void set" + mname +
+                                            "(" + provFields.get(name).get(0) + ") {\n"
+                            )
+                            for(provKey in provNested) {
+                                if(provKey != name) {
+                                    methods = methods.concat(
+                                            tab + tab + "set" + methodNameMap.get(provKey) + "(" + provHash.get(provKey) + ");\n"
+                                    )
+                                }
+                            }
+                            for(provItem in provFields.get(name).get(2).split(",")) {
+                                if(provItem.size() != 0) {
+                                    methods = methods.concat(
+                                            tab + tab + "this." + provItem + " = " + provItem + ";\n"
+                                    )
+                                }
+                            }
+                            methods = methods.concat(
+                                    tab + tab + "formatSuper();\n" +
+                                            tab + "}"
+                            )
+                        } else {
+                            methods = methods.concat(
+                                    "\n\n" + tab + "public void set" + mname + "(" + type + " " + name + ") {\n" +
+                                            tab + tab + "this." + name + " = " + name + ";\n" + tab + tab + "formatSuper();\n" +
+                                            tab + "}"
+                            )
+                        }
+
+                        if(generic == "<HashMap>") {
+                            constructor = constructor.concat(
+                                    "\n" + tab + tab + "for(int i = 0; " + name + " != null && i < " + name + ".size(); i++) {\n" +
+                                            tab + tab + tab + "Data.mergeHash(" + name + "Map, (HashMap<String, Object>) " + name + ".get(i));\n" +
+                                            tab + tab + "}\n"
+                            )
+                        }
+                }
+            }
+            if(pass == 0)
+                println()
+        }
+        if(pass == 1 && ubh)
+            imports = imports.concat("import com.example.universitymarket.utilities.Data;\n")
+    }
+    constructor = constructor.concat(
+            tab + tab + "formatSuper();\n" + tab + "}"
+    )
+
+    HashMap<String, String> provHash = (HashMap<String, String>) provFields.get("super").get(1)
+    List<String> provNested = provHash.keySet().asList()
+    constructor = constructor.concat(
+            "\n\n" + tab + "public " + class_name +
+                    "(" + provFields.get("super").get(0) + ") {\n"
+    )
+    for(provKey in provNested) {
+        if(provKey != "super") {
+            constructor = constructor.concat(
+                    tab + tab + "set" + methodNameMap.get(provKey) + "(" + provHash.get(provKey) + ");\n"
+            )
+        }
+    }
+    for(provItem in provFields.get("super").get(2).split(",")) {
+        if(provItem.size() != 0) {
+            constructor = constructor.concat(
+                    tab + tab + "this." + provItem + " = " + provItem + ";\n"
+            )
+        }
+    }
+    constructor = constructor.concat(
+            tab + tab + "formatSuper();\n" + tab + "}"
+    )
+
+    if(!cache) {
+        constructor = constructor.concat(
+                "\n\n" + tab + "public " + class_name + "() {\n" +
+                        tab + tab + "formatSuper();\n" + tab + "}"
+        )
+    } else {
+        constructor = constructor.concat(
+                "\n\n" + tab + "public " + class_name + "(String " + idName +") {\n" +
+                        tab + tab + "this." + idName + " = " + idName + ";\n" +
+                        tab + tab + "formatSuper();\n" + tab + "}"
+        )
+    }
+
+    methods = methods.concat("\n\n" + tab + "public HashMap<String, Object> getSuper() { return this; }")
+
+    methods = methods.concat("\n\n" + tab + "private void formatSuper() {\n")
+    for(int i = provKeys.size() - 1; i >= 0; i--) {
+        List<Object> curProv = provHierarchy.get(provKeys.get(i))
+        for(int z = 0; z < curProv.size(); z++) {
+            if(z == 0) {
+                methods = methods.concat(
+                        tab + tab + provKeys.get(i) +
+                                (provKeys.get(i) != "super" ? " = new HashMap<>" : ".clear") + "();\n"
+                )
+            }
+            methods = methods.concat(
+                    tab + tab + provKeys.get(i) + ".put(\"" + curProv.get(z).get(1) + "\", " + curProv.get(z).get(1) + ");\n"
+            )
+        }
+    }
+    methods = methods.concat(tab + "}")
+
+    String body = declarations + constructor + methods
+    String definition = \
+            "public class " + class_name + " extends HashMap<String, Object> {\n" +
+            body + "\n}"
+    String object = packag + imports + comments + definition
+    response[0] = new String(object)
+
+    String coll_name = "\"" + class_name.toLowerCase() + "s\""
+    String obj_name = class_name.toLowerCase() + "OBJ"
+    String setters = ""
+    String getters = ""
+    String listeners = ""
+    setters = setters.concat(
+            "\n    public static void set" + class_name + "(@NonNull " + class_name + " " + obj_name + ", boolean clear, @Nullable Callback<" + class_name + "> response) {\n" +
+                    "        if(response == null && " + obj_name + ".get" + idMethod + "() == null)\n" +
+                    "            return;\n" +
+                    "        else if(response != null && " + obj_name + ".get" + idMethod + "() == null) {\n" +
+                    "            response.onFailure(new NullPointerException(\"" + class_name + " ID does not exist in " + class_name.toLowerCase() + " object \" + " + obj_name + "));\n" +
+                    "            return;\n" +
+                    "        }\n" +
+                    "        Task<HashMap<String, Object>> echo = setDoc(" + coll_name + ", " + obj_name + ".get" + idMethod + "(), clear, " + obj_name + ");\n" +
+                    "        if(response != null) {\n" +
+                    "            echo.addOnSuccessListener(task -> {\n" +
+                    "                " + class_name + " result = new " + class_name + "(task);\n" +
+                    "                response.onSuccess(result);\n" +
+                    "            });\n" +
+                    "            echo.addOnFailureListener(response::onFailure);\n" +
+                    "        }\n" +
+                    "    }\n\n" +
+            \
+            "    public static void set" + class_name + "s(@NonNull " + class_name + "[] " + obj_name + ", boolean clear, @Nullable Callback<List<" + class_name + ">> response) {\n" +
+                    "        List<" + class_name + "> responses = new ArrayList<>();\n" +
+                    "        for(int i = 0; i < " + obj_name + ".length; i++) {\n" +
+                    "            if(response == null && " + obj_name + "[i].get" + idMethod + "() == null)\n" +
+                    "                continue;\n" +
+                    "            else if(response != null && " + obj_name + "[i].get" + idMethod + "() == null) {\n" +
+                    "                response.onFailure(new NullPointerException(\"" + class_name + " ID does not exist in " + class_name.toLowerCase() + " object \" + " + obj_name + "[i]));\n" +
+                    "                continue;\n" +
+                    "            }\n" +
+                    "            Task<HashMap<String, Object>> echo = setDoc(" + coll_name + ", " + obj_name + "[i].get" + idMethod + "(), clear, " + obj_name + "[i]);\n" +
+                    "            if(response != null) {\n" +
+                    "                echo.addOnFailureListener(response::onFailure);\n" +
+                    "                if(i == " + obj_name + ".length - 1) {\n" +
+                    "                    echo.addOnSuccessListener(task -> {\n" +
+                    "                        " + class_name + " result = new " + class_name + "(task);\n" +
+                    "                        responses.add(result);\n" +
+                    "                        response.onSuccess(responses);\n" +
+                    "                    });\n" +
+                    "                } else {\n" +
+                    "                    echo.addOnSuccessListener(task -> {\n" +
+                    "                        " + class_name + " result = new " + class_name + "(task);\n" +
+                    "                        responses.add(result);\n" +
+                    "                    });\n" +
+                    "                }\n" +
+                    "            }\n" +
+                    "        }\n" +
+                    "    }\n"
+    )
+    getters = getters.concat(
+            "\n    public static void get" +  class_name  + "(@NonNull String docID, @NonNull Callback<" +  class_name  + "> response) {\n" +
+                    "        getDoc(" +  coll_name  + ", docID)\n" +
+                    "                .addOnSuccessListener(task -> {\n" +
+                    "                    " +  class_name  + " result = new " +  class_name  + "(task);\n" +
+                    "                    response.onSuccess(result);\n" +
+                    "                })\n" +
+                    "                .addOnFailureListener(response::onFailure);\n" +
+                    "    }\n\n" +
+            \
+            "    public static void get" +  class_name  + "s(@NonNull List<String> docID, @Nullable SortByField sortByField, @NonNull Callback<List<" +  class_name  + ">> response) {\n" +
+                    "        List<" + class_name + "> list = new ArrayList<>();\n" +
+                    "        if(docID.isEmpty()) {\n" +
+                    "            response.onFailure(new Exception(\"A non-empty docID list is required\"));\n" +
+                    "            return;\n" +
+                    "        }\n" +
+                    "        getColl(" + coll_name + ", Filter.inArray(\"id\", docID), sortByField, -1)\n" +
+                    "                .addOnSuccessListener(task -> {\n" +
+                    "                    for (HashMap<String, Object> hash : task) {\n" +
+                    "                        " + class_name + " result = new " + class_name + "(hash);\n" +
+                    "                        list.add(result);\n" +
+                    "                    }\n" +
+                    "                    response.onSuccess(list);\n" +
+                    "                })\n" +
+                    "                .addOnFailureListener(response::onFailure);\n" +
+                    "    }\n\n" +
+            \
+            "    public static void get" +  class_name  + "s(@Nullable Filter filter, @Nullable SortByField sortByField, @Nullable Integer pageNo, @NonNull Callback<List<" +  class_name  + ">> response) {\n" +
+                    "        List<" +  class_name  + "> list = new ArrayList<>();\n" +
+                    "        getColl(" + coll_name + ", filter, sortByField, pageNo == null ? -1 : Math.max(pageNo, 0))\n" +
+                    "                .addOnSuccessListener(task -> {\n" +
+                    "                    for (HashMap<String, Object> hash : task) {\n" +
+                    "                        " +  class_name  + " result = new " +  class_name  + "(hash);\n" +
+                    "                        list.add(result);\n" +
+                    "                    }\n" +
+                    "                    response.onSuccess(list);\n" +
+                    "                })\n" +
+                    "                .addOnFailureListener(response::onFailure);\n" +
+                    "    }\n\n" +
+            \
+            "    public static void getAll" +  class_name  + "s(@Nullable SortByField sortByField, @NonNull Callback<List<" +  class_name  + ">> response) {\n" +
+                    "        List<" +  class_name  + "> list = new ArrayList<>();\n" +
+                    "        getColl(" +  coll_name  + ", null, sortByField, -1)\n" +
+                    "                .addOnSuccessListener(task -> {\n" +
+                    "                    for (HashMap<String, Object> hash : task) {\n" +
+                    "                        " +  class_name  + " result = new " +  class_name  + "(hash);\n" +
+                    "                        list.add(result);\n" +
+                    "                    }\n" +
+                    "                    response.onSuccess(list);\n" +
+                    "                })\n" +
+                    "                .addOnFailureListener(response::onFailure);\n" +
+                    "    }\n"
+    )
+    listeners = listeners.concat(
+            "\n    public static void listenTo" + class_name + "(@NonNull String docID, @NonNull Listener<" + class_name + "> response) {\n" +
+                    "        Pair<DocumentReference, Task<DocumentSnapshot>> pair = listenToDoc(" + coll_name + ", docID);\n" +
+                    "        pair.second\n" +
+                    "                .addOnSuccessListener(task -> pair.first.addSnapshotListener((snapshot, error) -> {\n" +
+                    "                    if(snapshot == null || task.getData() == null || snapshot.getData() == null || task.getData().equals(snapshot.getData())) {\n" +
+                    "                        return;\n" +
+                    "                    }\n" +
+                    "\n" +
+                    "                    int before = task.getData().entrySet().size(), after = snapshot.getData().entrySet().size();\n" +
+                    "                    if(before < after) {\n" +
+                    "                        response.onAdded(new " + class_name + "((HashMap<String, Object>) snapshot.getData()));\n" +
+                    "                    } else if(before > after) {\n" +
+                    "                        response.onRemoved(new " + class_name + "((HashMap<String, Object>) snapshot.getData()));\n" +
+                    "                    } else {\n" +
+                    "                        response.onModified(new " + class_name + "((HashMap<String, Object>) snapshot.getData()));\n" +
+                    "                    }\n" +
+                    "                }))\n" +
+                    "                .addOnFailureListener(response::onFailure);\n" +
+                    "    }\n\n" +
+            \
+            "    public static void listenTo" + class_name + "s(@NonNull Listener<" + class_name + "> response) {\n" +
+                    "        Pair<CollectionReference, Task<QuerySnapshot>> pair = listenToColl(" + coll_name + ");\n" +
+                    "        pair.second\n" +
+                    "                .addOnSuccessListener(task -> pair.first.addSnapshotListener((snapshot, error) -> {\n" +
+                    "                    if(snapshot == null || task.getDocumentChanges().equals(snapshot.getDocumentChanges())) {\n" +
+                    "                        return;\n" +
+                    "                    }\n" +
+                    "\n" +
+                    "                    for(DocumentChange dc : snapshot.getDocumentChanges()) {\n" +
+                    "                        switch (dc.getType()) {\n" +
+                    "                            case ADDED:\n" +
+                    "                                response.onAdded(new " + class_name + "((HashMap<String, Object>) dc.getDocument().getData()));\n" +
+                    "                                break;\n" +
+                    "                            case MODIFIED:\n" +
+                    "                                response.onModified(new " + class_name + "((HashMap<String, Object>) dc.getDocument().getData()));\n" +
+                    "                                break;\n" +
+                    "                            case REMOVED:\n" +
+                    "                                response.onRemoved(new " + class_name + "((HashMap<String, Object>) dc.getDocument().getData()));\n" +
+                    "                                break;\n" +
+                    "                        }\n" +
+                    "                    }\n" +
+                    "                }))\n" +
+                    "                .addOnFailureListener(response::onFailure);\n" +
+                    "    }\n"
+    )
+    response[1] = setters + getters + listeners
+
+    String provOrdered = ""
+    temp = provFields.get("super").get(0).split("[^,]* ")
+    for(line in temp) {
+        if(line.length() > 0)
+            provOrdered = provOrdered.concat(line + " ")
+    }
+    packag = "package com.example.universitymarket.globals.actives;\n"
+    imports = imports.concat(
+            "import android.app.Application;\n" +
+                    "import com.example.universitymarket.models." + class_name + ";\n"
+    )
+    declarations = declarations.replace("private", "public static")
+    body = declarations
+    methods = \
+            "\n    public static " + class_name + " toPOJO() {\n" +
+            "        return new " + class_name + "(" + provOrdered + ");\n    }"
+    definition = \
+            "public class Active" + class_name + " extends Application {\n" +
+            body + methods + "\n}"
+    object = packag + imports + comments + definition
+    response[2] = new String(object)
+
+    String details = ""
+    temp = declarations.split("\n")
+    for(line in temp) {
+        line = line.replace("    public static ", "")
+        line = line.replace("HashMap<String, ", "HashMap<String,")
+        def buff = line.split("( )")
+        String type = buff[0], name = buff[1]
+        if(methodNameMap.get(name) != null) {
+            details = details.concat(
+                    "        Active" + class_name + "." + name + " = " + obj_name +
+                            ".get" + methodNameMap.get(name) + "();\n"
+            )
+        }
+    }
+    provOrdered = ""
+    temp = provFields.get("super").get(0).split("[^,]* ")
+    for(line in temp) {
+        if(line.length() > 0)
+            provOrdered = provOrdered.concat("Active" + class_name + "." + line + " ")
+    }
+    details = details.concat(
+            "\n" + tab + tab + "Log.d(\"setActive" + class_name + "\", \"Success = \" + " +
+                    "setCache(cur_act, \"Active" + class_name + "\", " + obj_name + ", false));\n"
+    )
+    String method = \
+            "\n\n    public static void setActive" + class_name + "(  Activity cur_act, " +
+            class_name + " " + obj_name + ") {\n" + details + "    }" +
+            "\n\n    public static " + class_name + " active" + class_name + "ToPOJO() {\n" +
+            "        return new " + class_name + "(" + provOrdered + ");\n    }"
+    response[3] = method
+
+    return response
+}
+
+static void update(String nString, String dString, def active_names, def obj_names, def file_names, def utility_path, def policy_path) {
+    String redc_comments_top = \
+            "/**\n * <b>\n * ANY MODIFICATIONS ABOVE WILL BE OVERWRITTEN ON BUILD \n" +
+            " * </b><p>\n * DO NOT REMOVE THIS BLOCK \n" +
+            "*/\n"
+    String redc_comments_bottom = \
+            "/**\n * <b>\n * ANY MODIFICATIONS BELOW WILL BE OVERWRITTEN ON BUILD \n" +
+            " * </b><p>\n * DO NOT REMOVE THIS BLOCK \n" +
+            "*/\n"
+
+    String header_obj = "package com.example.universitymarket.utilities;\n\n"
+    String header_active = "package com.example.universitymarket.utilities;\n\n"
+    if(active_names.size() > 0)
+        header_obj = header_obj.concat("import android.widget.Toast;\n")
+    for(val in obj_names)
+        header_obj = header_obj.concat("import com.example.universitymarket.models." + val + ";\n")
+    for(val in active_names) {
+        header_obj = header_obj.concat("import com.example.universitymarket.globals.actives." + val + ";\n")
+        header_active = header_active.concat("import com.example.universitymarket.models." + val.split("(Active)")[1] + ";\n")
+        header_active = header_active.concat("import com.example.universitymarket.globals.actives." + val + ";\n")
+    }
+
+    String pString = "    String[] json_filenames = { \n"
+    for(fn in file_names) {
+        pString = pString.concat("            \"" + fn + "\",\n")
+    }
+    pString = pString.substring(0, pString.length() - 2).concat("\n    };\n")
+    pString = pString.concat("\n    List<String> collection_names = Arrays.stream(json_filenames).map(string -> string.split(\"_\")[0] + \"s\").collect(Collectors.toList());")
+
+    for(int i = 0; i < 3; i++) {
+        String header = ""
+        String body
+        String path
+        switch(i) {
+            case 0:
+                body = nString
+                path = utility_path.getAbsolutePath() + "/Network.java"
+                header = header_obj + redc_comments_top
+                break
+            case 1:
+                body = dString;
+                path = utility_path.getAbsolutePath() + "/Data.java"
+                header = header_active + redc_comments_top
+                break
+            case 2:
+                body = pString;
+                path = policy_path.getAbsolutePath() + "/Policy.java"
+                break
+        }
+
+        if(body.length() != 0) {
+            File cur_file = new File(path)
+            InputStream inp = new FileInputStream(cur_file)
+            BufferedReader reader = new BufferedReader(new InputStreamReader(inp, StandardCharsets.UTF_8))
+            StringBuilder data = new StringBuilder()
+
+            String line = reader.readLine()
+            while(line != null && i < 2) {
+                if(line.contains("*/")) {
+                    line = reader.readLine()
+                    break
+                }
+                line = reader.readLine()
+            }
+            while(line != null) {
+                if(line.contains("/**"))
+                    break
+                data.append(line).append("\n")
+                line = reader.readLine()
+            }
+            new File(path).write(
+                    header + data.toString() + redc_comments_bottom + body  + "\n}"
+            )
+            inp.close()
+        }
+    }
+}
+
+task generateSupported {
+    File[] skeletons = file("${project.projectDir}/src/main/res/raw").listFiles()
+    Map<String, File> skeleton_map = new HashMap<>()
+    File object_path = file("${project.projectDir}/src/main/java/com/example/universitymarket/models")
+    object_path.mkdir()
+    File global_path = file("${project.projectDir}/src/main/java/com/example/universitymarket/globals/actives")
+    global_path.mkdir()
+    File policy_path = file("${project.projectDir}/src/main/java/com/example/universitymarket/globals")
+    File utility_path = file("${project.projectDir}/src/main/java/com/example/universitymarket/utilities")
+    List<String> active_names = new ArrayList<>()
+    List<String> obj_names = new ArrayList<>()
+    List<String> file_names = new ArrayList<>()
+    for (s in skeletons) {
+        file_names.add(s.getName())
+        String temp = s.getName().split("(_skeleton)(_cached)?(\\.json)")[0]
+        StringBuilder name = new StringBuilder()
+                .append(temp.charAt(0).toUpperCase())
+                .append(temp.substring(1, temp.length()))
+                .append(".java")
+        skeleton_map.put(name.toString(), s)
+    }
+    String nString = "", dString = ""
+
+    for (sn in skeleton_map.keySet()) {
+        String name = sn.split("\\.")[0]
+        obj_names.add(name)
+        List<Object> map = new ArrayList<>()
+        HashMap<String, Object> json = new JsonSlurperClassic().parseText(skeleton_map.get(sn).text)
+        crawl(json, map, 0)
+
+        String[] generated = generate(map, name, skeleton_map.get(sn))
+        new File(object_path, sn).write(generated[0])
+        nString = nString.concat(generated[1])
+        if(skeleton_map.get(sn).name.matches(".*(_cached\\.json)")) {
+            active_names.add("Active" + name)
+            new File(global_path, "Active" + sn).write(generated[2])
+            dString = dString.concat(generated[3])
+        }
+    }
+    update(nString, dString, active_names, obj_names, file_names, utility_path, policy_path)
+}

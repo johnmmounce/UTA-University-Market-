@@ -1,0 +1,22 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Theme.UniversityMarket" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
+        <!-- Primary brand color. -->
+        <item name="colorPrimary">#2764AB</item>
+        <item name="colorPrimaryVariant">#598ED9</item>
+        <item name="colorPrimaryDark">#173452</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <!-- Secondary brand color. -->
+        <item name="colorSecondary">#E6853E</item>
+        <item name="colorSecondaryVariant">#B75B2B</item>
+        <item name="colorOnSecondary">@color/white</item>
+        <!-- Tertiary brand color. -->
+        <item name="colorTertiary">@color/white</item>
+        <item name="colorOnTertiary">#7B7B7B</item>
+        <item name="colorTertiaryContainer">#E0E0E0</item>
+        <!-- Status bar color. -->
+        <item name="android:statusBarColor">?colorPrimaryDark</item>
+        <!-- Customize your theme here. -->
+        <item name="windowActionBarOverlay">true</item>
+    </style>
+</resources>

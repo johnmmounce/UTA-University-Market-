@@ -1,0 +1,34 @@
+{
+  "project_info": {
+    "project_number": "1097307838829",
+    "project_id": "university-market-e4aa7",
+    "storage_bucket": "university-market-e4aa7.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1097307838829:android:45c438369f04249e886264",
+        "android_client_info": {
+          "package_name": "com.example.universitymarket"
+        }
+      },
+      "oauth_client": [
+        {
+          "client-id": "1097307838829-m0g3p6alksj3rkpt05612o63ifcfo7m6.apps.googleusercontent.com",
+          "client-type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCSM0y27A9enZkB9t87kNA5y8TgPbg2V9s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

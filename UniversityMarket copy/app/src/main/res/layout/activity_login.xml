@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/drip"
+    tools:context=".Login"
+    >
+
+
+    <Button
+        android:id="@+id/got_it"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="380dp"
+        android:text="@string/got_it"
+        android:textColor="@color/white"
+        app:backgroundTint="#2764AB"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.498"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <EditText
+        android:id="@+id/email"
+        style="@style/Widget.AppCompat.AutoCompleteTextView"
+        android:layout_width="322dp"
+        android:layout_height="48dp"
+        android:layout_marginTop="110dp"
+        android:layout_marginEnd="44dp"
+        android:background="#89B3F0"
+        android:hint="@string/enter_your_email"
+        android:importantForAutofill="no"
+        android:inputType="text"
+        android:minHeight="48dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        tools:ignore="TextContrastCheck" />
+
+    <EditText
+        android:id="@+id/password"
+        style="@style/Widget.AppCompat.AutoCompleteTextView"
+        android:layout_width="322dp"
+        android:layout_height="48dp"
+        android:layout_marginTop="168dp"
+        android:layout_marginEnd="44dp"
+        android:background="#89B3F0"
+        android:hint="@string/enter_your_password"
+        android:importantForAutofill="no"
+        android:inputType="text"
+        android:minHeight="48dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        tools:ignore="TextContrastCheck" />
+
+    <EditText
+        android:id="@+id/password2"
+        style="@style/Widget.AppCompat.AutoCompleteTextView"
+        android:layout_width="322dp"
+        android:layout_height="48dp"
+        android:layout_marginTop="226dp"
+        android:layout_marginEnd="44dp"
+        android:background="#89B3F0"
+        android:hint="Re-Enter Your Password"
+        android:importantForAutofill="no"
+        android:inputType="text"
+        android:minHeight="48dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        tools:ignore="TextContrastCheck" />
+
+    <EditText
+        android:id="@+id/fname"
+        style="@style/Widget.AppCompat.AutoCompleteTextView"
+        android:layout_width="322dp"
+        android:layout_height="48dp"
+        android:layout_marginTop="284dp"
+        android:layout_marginEnd="44dp"
+        android:background="#89B3F0"
+        android:hint="First Name"
+        android:importantForAutofill="no"
+        android:inputType="text"
+        android:minHeight="48dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        tools:ignore="TextContrastCheck" />
+
+    <EditText
+        android:id="@+id/lname"
+        style="@style/Widget.AppCompat.AutoCompleteTextView"
+        android:layout_width="322dp"
+        android:layout_height="48dp"
+        android:layout_marginTop="342dp"
+        android:layout_marginEnd="44dp"
+        android:background="#89B3F0"
+        android:hint="Last Name"
+        android:importantForAutofill="no"
+        android:inputType="text"
+        android:minHeight="48dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        tools:ignore="TextContrastCheck" />
+
+    <Button
+        android:id="@+id/login"
+        android:layout_width="166dp"
+        android:layout_height="82dp"
+        android:layout_marginTop="428dp"
+        android:text="Sign up"
+        android:textColor="@color/white"
+        android:textSize="20sp"
+        app:backgroundTint="#2764AB"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.497"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+
+    <ImageView
+        android:id="@+id/imageView6"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="320dp"
+        android:src="@drawable/maverick"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        android:contentDescription="@string/mavlogo" />
+
+    <TextView
+        android:id="@+id/textView"
+        android:layout_width="182dp"
+        android:layout_height="35dp"
+        android:layout_marginTop="568dp"
+        android:background="#2764AB"
+        android:gravity="center"
+        android:text="Already Have an Account?"
+        android:textColor="@color/white"
+        app:layout_constraintEnd_toStartOf="@+id/signin"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <Button
+        android:id="@+id/signin"
+        android:layout_width="92dp"
+        android:layout_height="48dp"
+        android:layout_marginTop="562dp"
+        android:layout_marginEnd="92dp"
+        android:text="Sign In"
+        app:backgroundTint="#2764AB"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/invalidEmail"
+        android:layout_width="360dp"
+        android:layout_height="307dp"
+        android:layout_marginBottom="324dp"
+        android:background="#d6f2eb"
+        android:gravity="center"
+        android:text="@string/invalid_email"
+        android:textSize="20sp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.49"
+        app:layout_constraintStart_toStartOf="parent" />
+
+
+</androidx.constraintlayout.widget.ConstraintLayout>
